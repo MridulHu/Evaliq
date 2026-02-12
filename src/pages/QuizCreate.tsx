@@ -82,11 +82,11 @@
                 onClick={() => setMethod(m.id)}
                 className="glass-card rounded-xl p-6 text-left hover:shadow-xl transition-all hover:-translate-y-1 animate-fade-in group"
               >
-                <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <m.icon className="h-6 w-6 text-primary-foreground" />
+                <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <m.icon className="h-6 w-6 text-primary-foreground " />
                 </div>
-                <h3 className="font-display text-lg font-semibold mb-1">{m.title}</h3>
-                <p className="text-sm text-muted-foreground">{m.description}</p>
+                <h3 className="font-display text-lg font-semibold mb-1 text-center">{m.title}</h3>
+                <p className="text-sm text-muted-foreground text-center">{m.description}</p>
               </button>
             ))}
           </div>

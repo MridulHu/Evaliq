@@ -139,7 +139,7 @@ export default function ManualQuizBuilder({
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="space-y-2">
-        <Label htmlFor="title" className="text-base font-semibold">Quiz Title</Label>
+        <Label htmlFor="title" className="text-base font-semibold ml-2.5">Quiz Title</Label>
         <Input
           id="title"
           placeholder="e.g., Biology Chapter 5 Review"
