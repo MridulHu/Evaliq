@@ -130,4 +130,11 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  .no-copy {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none; /* iOS long press */
+}
+
 }

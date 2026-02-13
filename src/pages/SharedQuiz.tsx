@@ -19,7 +19,10 @@ export default function SharedQuiz() {
 
   const [quizTitle, setQuizTitle] = useState("");
   const [quizId, setQuizId] = useState("");
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<Question[]>(() => {
+  return JSON.parse(localStorage.getItem("quiz_questions") || "[]");
+});
+
 
   // ✅ Persist answers (refresh proof)
   const [answers, setAnswers] = useState<Record<string, number>>(() => {
@@ -49,7 +52,15 @@ export default function SharedQuiz() {
   const [maxRetries, setMaxRetries] = useState(0);
   const [attemptCount, setAttemptCount] = useState(0);
   const [blocked, setBlocked] = useState(false);
-const retriesLeft = Math.max(maxRetries - attemptCount, 0);
+  const retriesLeft = Math.max(maxRetries - attemptCount, 0);
+
+  const [sharingEnabled, setSharingEnabled] = useState(true);
+  const [showAnswers, setShowAnswers] = useState(true);
+  const [preventTabSwitch, setPreventTabSwitch] = useState(false);
+  const [tabWarnings, setTabWarnings] = useState(3);
+  const [preventCopyPaste, setPreventCopyPaste] = useState(false);
+  const [warningCount, setWarningCount] = useState(0);
+
 
   /* --------------------------------------------
      LOAD QUIZ + SETTINGS
@@ -60,7 +71,7 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
 
       const { data: quiz } = await supabase
         .from("quizzes")
-        .select("id, title, duration_minutes, max_retries")
+        .select("id, title, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste")
         .eq("share_token", shareToken)
         .maybeSingle();
 
@@ -69,6 +80,18 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
         setLoading(false);
         return;
       }
+      if (!quiz.sharing_enabled) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      
+      /* ✅ Save settings */
+      setSharingEnabled(quiz.sharing_enabled ?? true);
+      setShowAnswers(quiz.show_answers ?? true);
+      setPreventTabSwitch(quiz.prevent_tab_switch ?? false);
+      setTabWarnings(quiz.tab_switch_warnings ?? 3);
+      setPreventCopyPaste(quiz.prevent_copy_paste ?? false);
 
       setQuizTitle(quiz.title);
       setQuizId(quiz.id);
@@ -79,19 +102,17 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
       if (quiz.duration_minutes) {
         setDurationMinutes(quiz.duration_minutes);
 
-        const storedStart = localStorage.getItem("quiz_start_time");
+        // ✅ Restore saved timer first
+        const savedTime = localStorage.getItem("quiz_time_left");
 
-        if (storedStart) {
-          const startTime = parseInt(storedStart);
-          const endTime = startTime + quiz.duration_minutes * 60 * 1000;
-
-          const remaining = Math.floor((endTime - Date.now()) / 1000);
-
-          setTimeLeft(remaining > 0 ? remaining : 0);
+        if (savedTime) {
+          setTimeLeft(parseInt(savedTime));
         } else {
+          // First attempt → start fresh timer
           setTimeLeft(quiz.duration_minutes * 60);
         }
       }
+
 
       const { data: qs } = await supabase
         .from("questions")
@@ -99,8 +120,14 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
         .eq("quiz_id", quiz.id)
         .order("order_num");
 
-      if (qs) setQuestions(qs);
+      if (qs) {
+  setQuestions(qs);
 
+  // ✅ Save questions for auto-submit scoring
+  localStorage.setItem("quiz_questions", JSON.stringify(qs));
+}
+
+      
       setLoading(false);
     };
 
@@ -167,8 +194,12 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
         title: "Time is up!",
         description: "Quiz auto-submitted.",
         variant: "destructive",
+        duration: Infinity,
       });
+      setTimeout(() => {
       handleSubmit(true);
+      }, 200);
+
       return;
     }
 
@@ -179,6 +210,88 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
     return () => clearInterval(interval);
   }, [timeLeft, submitted, started]);
 
+  useEffect(() => {
+  if (timeLeft === null) return;
+
+  localStorage.setItem("quiz_time_left", timeLeft.toString());
+}, [timeLeft]);
+
+  useEffect(() => {
+  if (!preventTabSwitch) return;
+  if (submitted) return;
+  if (!started) return;
+
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      setWarningCount((prev) => {
+        const next = prev + 1;
+
+        toast({
+          title: "Warning: Tab/App Switch Detected",
+          description: `Warnings left: ${Math.max(tabWarnings - next, 0)}`,
+          variant: "destructive",
+          duration: Infinity,
+        });
+
+        // ✅ Auto-submit after limit reached
+        if (next >= tabWarnings) {
+          toast({
+            title: "Auto Submitted",
+            description: "Too many tab/app switches detected.",
+            variant: "destructive",
+          });
+
+          handleSubmit(true);
+        }
+
+        return next;
+      });
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  return () => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+}, [preventTabSwitch, tabWarnings, submitted, started, toast]);
+
+
+useEffect(() => {
+  if (!preventCopyPaste) return;
+
+  const blockKeys = (e: KeyboardEvent) => {
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      ["c", "v", "x", "a"].includes(e.key.toLowerCase())
+    ) {
+      e.preventDefault();
+    }
+  };
+
+  document.addEventListener("keydown", blockKeys);
+
+  return () => {
+    document.removeEventListener("keydown", blockKeys);
+  };
+}, [preventCopyPaste]);
+
+useEffect(() => {
+  if (!preventCopyPaste) return;
+
+  const blockRightClick = (e: MouseEvent) => {
+    e.preventDefault();
+  };
+
+  document.addEventListener("contextmenu", blockRightClick, true);
+
+  return () => {
+    document.removeEventListener("contextmenu", blockRightClick, true);
+  };
+}, [preventCopyPaste]);
+
+
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -188,6 +301,23 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
   /* --------------------------------------------
      NAME ENTRY GATE (Attempts removed here)
   -------------------------------------------- */
+
+  if (notFound) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="glass-card p-8 rounded-xl text-center max-w-md">
+        <h2 className="text-2xl font-bold mb-2">
+          Quiz Not Available
+        </h2>
+        <p className="text-muted-foreground">
+          This quiz link is invalid or sharing has been disabled by the creator.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
   if (!started) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -239,9 +369,18 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
      SELECT ANSWER (unchanged)
   -------------------------------------------- */
   const selectAnswer = (questionId: string, optionIndex: number) => {
-    if (submitted) return;
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
-  };
+  if (submitted) return;
+
+  setAnswers((prev) => {
+    const updated = { ...prev, [questionId]: optionIndex };
+
+    // ✅ Save instantly (so auto-submit never misses)
+    localStorage.setItem("quiz_answers", JSON.stringify(updated));
+
+    return updated;
+  });
+};
+
 
   /* --------------------------------------------
      SUBMIT QUIZ (BLOCKED FIX ADDED)
@@ -256,15 +395,30 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
       return;
     }
 
-    if (!auto && Object.keys(answers).length < questions.length) {
+    if (!auto && Object.keys(answers).length < questions.length) {  
       toast({ title: "Please answer all questions", variant: "destructive" });
       return;
     }
 
-    let correct = 0;
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correct_option_index) correct++;
-    });
+    const latestAnswers: Record<string, number> =
+    auto
+      ? JSON.parse(localStorage.getItem("quiz_answers") || "{}")
+      : answers;
+
+    // ✅ Always use latest questions (state OR localStorage)
+      const latestQuestions: Question[] =
+        questions.length > 0
+          ? questions
+          : JSON.parse(localStorage.getItem("quiz_questions") || "[]");
+
+      let correct = 0;
+
+      latestQuestions.forEach((q) => {
+        if (latestAnswers[q.id] === q.correct_option_index) {
+          correct++;
+        }
+      });
+
 
     setScore(correct);
     setSubmitted(true);
@@ -273,9 +427,9 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
       quiz_id: quizId,
       user_id: null,
       participant_name: participantName,
-      answers: answers,
+      answers: latestAnswers,
       score: correct,
-      total_questions: questions.length,
+      total_questions: latestQuestions.length,
     });
 
     await checkAttempts();
@@ -283,31 +437,44 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
     // ✅ Clear stored progress after submission
     localStorage.removeItem("quiz_answers");
     localStorage.removeItem("quiz_start_time");
+    localStorage.removeItem("quiz_time_left");
+    localStorage.removeItem("quiz_questions");
   };
 
   /* --------------------------------------------
      RETRY FIX
   -------------------------------------------- */
-  const handleRetry = async () => {
-    if (maxRetries > 0 && attemptCount >= maxRetries) {
-      toast({ title: "No retries left", variant: "destructive" });
-      setBlocked(true);
-      return;
-    }
+ const handleRetry = async () => {
+  if (maxRetries > 0 && attemptCount >= maxRetries) {
+    toast({ title: "No retries left", variant: "destructive" });
+    setBlocked(true);
+    return;
+  }
 
-    setAnswers({});
-    setSubmitted(false);
-    setScore(0);
+  setAnswers({});
+  setSubmitted(false);
+  setScore(0);
 
-    localStorage.setItem("quiz_answers", "{}");
-    localStorage.setItem("quiz_start_time", Date.now().toString());
+  localStorage.removeItem("quiz_answers");
+  localStorage.removeItem("quiz_time_left");
+  localStorage.removeItem("quiz_start_time");
 
-    if (durationMinutes) {
-      setTimeLeft(durationMinutes * 60);
-    }
+  if (durationMinutes) {
+    const freshTime = durationMinutes * 60;
 
-    await checkAttempts();
-  };
+    setTimeLeft(freshTime);
+
+    // Save fresh timer immediately
+    localStorage.setItem("quiz_time_left", freshTime.toString());
+  }
+
+  //  Recheck attempts count
+  await checkAttempts();
+
+  //  Reload page cleanly
+  window.location.reload();
+};
+
 
   const optionLabels = ["A", "B", "C", "D"];
 
@@ -315,7 +482,13 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
      MAIN UI (STYLING UNCHANGED)
   -------------------------------------------- */
   return (
-    <div className="min-h-screen bg-background">
+    <div
+    className="min-h-screen bg-background"
+    style={{
+      userSelect: preventCopyPaste ? "none" : "auto",
+      WebkitUserSelect: preventCopyPaste ? "none" : "auto",
+    }}
+  >
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
@@ -375,7 +548,12 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
               key={q.id}
               className="glass-card rounded-xl p-5 animate-fade-in"
             >
-              <p className="font-display font-semibold mb-3">
+              <p
+                className={`font-display font-semibold mb-3 ${
+                  preventCopyPaste ? "no-copy" : ""
+                }`}
+              >
+
                 <span className="text-muted-foreground mr-2">
                   {qIndex + 1}.
                 </span>
@@ -389,16 +567,19 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
 
                   let borderClass = "border-border hover:border-primary/30";
 
-                  if (submitted) {
-                    if (isCorrect)
-                      borderClass =
-                        "border-accent bg-accent/10 ring-1 ring-accent";
-                    else if (isSelected && !isCorrect)
+                  // ✅ Selected option always stays blue (before + after submit)
+                  if (isSelected) {
+                    borderClass = "border-primary bg-primary/10 ring-1 ring-primary";
+                  }
+
+                  // ✅ Only reveal correct/wrong if showAnswers is enabled
+                  if (submitted && showAnswers) {
+                    if (isCorrect) {
+                      borderClass = "border-accent bg-accent/10 ring-1 ring-accent";
+                    } else if (isSelected && !isCorrect) {
                       borderClass =
                         "border-destructive bg-destructive/10 ring-1 ring-destructive";
-                  } else if (isSelected) {
-                    borderClass =
-                      "border-primary bg-primary/10 ring-1 ring-primary";
+                    }
                   }
 
                   return (
@@ -410,18 +591,29 @@ const retriesLeft = Math.max(maxRetries - attemptCount, 0);
                     >
                       <span
                         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                          isSelected || (submitted && isCorrect)
-                            ? submitted && isCorrect
+                          // ✅ Exam Mode: No correct/wrong reveal
+                          submitted && !showAnswers
+                            ? isSelected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+
+                            // ✅ Normal Mode: Show correct + wrong after submit
+                            : submitted && showAnswers
+                            ? isCorrect
                               ? "bg-accent text-accent-foreground"
-                              : submitted && isSelected
+                              : isSelected
                               ? "bg-destructive text-destructive-foreground"
-                              : "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+
+                            // ✅ Before submission
+                            : isSelected
+                            ? "bg-primary text-primary-foreground"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {optionLabels[oIndex]}
                       </span>
-                      <span className="text-sm">{opt}</span>
+                      <span className={`text-sm ${preventCopyPaste ? "no-copy" : ""}`}>{opt}</span>
                     </button>
                   );
                 })}

@@ -45,6 +45,11 @@ interface Quiz {
   // ✅ Settings fields
   duration_minutes?: number | null;
   max_retries?: number;
+  sharing_enabled?: boolean;
+  show_answers?: boolean;
+  prevent_tab_switch?: boolean;
+  tab_switch_warnings?: number;
+  prevent_copy_paste?: boolean;
 }
 
 export default function Dashboard() {
@@ -64,6 +69,14 @@ export default function Dashboard() {
   const [duration, setDuration] = useState<number | null>(null);
   const [retriesEnabled, setRetriesEnabled] = useState(false);
   const [maxRetries, setMaxRetries] = useState(0);
+  const [sharingEnabled, setSharingEnabled] = useState(true);
+  const [showAnswers, setShowAnswers] = useState(true);
+  const [preventTabSwitch, setPreventTabSwitch] = useState(false);
+  const [tabWarnings, setTabWarnings] = useState(2);
+
+  const [preventCopyPaste, setPreventCopyPaste] = useState(false);
+
+
 
   /* -----------------------------------
      FETCH QUIZZES
@@ -72,7 +85,7 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from("quizzes")
       .select(
-        "id, title, share_token, created_at, duration_minutes, max_retries"
+        "id, title, share_token, created_at, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste"
       )
       .eq("user_id", user!.id)
       .order("created_at", { ascending: false });
@@ -144,8 +157,16 @@ export default function Dashboard() {
   ----------------------------------- */
   const openSettings = (quiz: Quiz) => {
     setSelectedQuiz(quiz);
+    setSharingEnabled(quiz.sharing_enabled ?? true);
+    setShowAnswers(quiz.show_answers ?? true);
 
     setDuration(quiz.duration_minutes ?? null);
+
+    setPreventTabSwitch(quiz.prevent_tab_switch ?? false);
+    setTabWarnings(quiz.tab_switch_warnings ?? 2);
+
+    setPreventCopyPaste(quiz.prevent_copy_paste ?? false);
+
 
     const retries = quiz.max_retries || 0;
     setRetriesEnabled(retries > 0);
@@ -167,6 +188,11 @@ export default function Dashboard() {
       .update({
         duration_minutes: duration,
         max_retries: finalRetries,
+        sharing_enabled: sharingEnabled,
+        show_answers: showAnswers,
+        prevent_tab_switch: preventTabSwitch,
+        tab_switch_warnings: tabWarnings,
+        prevent_copy_paste: preventCopyPaste,
       })
       .eq("id", selectedQuiz.id);
 
@@ -219,14 +245,14 @@ export default function Dashboard() {
         {/* HERO */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
           <div className="text-center sm:text-left">
-  <h1 className="font-display text-3xl font-bold">
-    My Quizzes
-  </h1>
+          <h1 className="font-display text-3xl font-bold">
+            My Quizzes
+          </h1>
 
-  <p className="text-muted-foreground mt-1">
-    {quizzes.length} quiz{quizzes.length !== 1 ? "zes" : ""} created
-  </p>
-</div>
+          <p className="text-muted-foreground mt-1">
+            {quizzes.length} quiz{quizzes.length !== 1 ? "zes" : ""} created
+          </p>
+        </div>
 
 
           <Button
@@ -445,7 +471,89 @@ export default function Dashboard() {
                 />
               )}
             </div>
+            {/* ✅ Sharing Enabled */}
+            <div className="space-y-2 mb-4">
+              <label className="font-semibold text-sm">
+                Enable Access
+              </label>
 
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={sharingEnabled}
+                  onChange={(e) => setSharingEnabled(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Allow quiz to be accessed by link
+                </span>
+              </div>
+            </div>
+
+            {/* ✅ Show Answers */}
+            <div className="space-y-2 mb-4">
+              <label className="font-semibold text-sm">
+                Show Correct Answers After Quiz
+              </label>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={showAnswers}
+                  onChange={(e) => setShowAnswers(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Disable this for not reveal answers at the end
+                </span>
+              </div>
+              <div className="space-y-2 mb-4">
+                <label className="font-semibold text-sm">
+                  Prevent Tab / App Switching
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={preventTabSwitch}
+                    onChange={(e) => setPreventTabSwitch(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Auto-submit if user switches tabs/apps
+                  </span>
+                </div>
+
+                {preventTabSwitch && (
+                  <Input
+                    type="number"
+                    min={1}
+                    value={tabWarnings}
+                    onChange={(e) => setTabWarnings(Number(e.target.value))}
+                    placeholder="Warnings before auto-submit"
+                  />
+                )}
+              </div>
+              <div className="space-y-2 mb-4">
+                <label className="font-semibold text-sm">
+                  Disable Copy / Paste
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={preventCopyPaste}
+                    onChange={(e) => setPreventCopyPaste(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Prevent copying questions or pasting answers
+                  </span>
+                </div>
+              </div>
+
+
+            </div>
             {/* Save */}
             <Button
               className="w-full gradient-primary text-primary-foreground"
