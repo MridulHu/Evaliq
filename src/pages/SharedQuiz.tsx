@@ -60,6 +60,8 @@ export default function SharedQuiz() {
   const [tabWarnings, setTabWarnings] = useState(3);
   const [preventCopyPaste, setPreventCopyPaste] = useState(false);
   const [warningCount, setWarningCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+
 
 
   /* --------------------------------------------
@@ -220,6 +222,7 @@ export default function SharedQuiz() {
   if (!preventTabSwitch) return;
   if (submitted) return;
   if (!started) return;
+  if (isRetrying) return;
 
   const handleVisibilityChange = () => {
     if (document.hidden) {
@@ -251,7 +254,7 @@ export default function SharedQuiz() {
   return () => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
   };
-}, [preventTabSwitch, tabWarnings, submitted, started, toast]);
+}, [preventTabSwitch, tabWarnings, submitted, started, toast, isRetrying]);
 
 
 useEffect(() => {
@@ -498,7 +501,7 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
     setBlocked(true);
     return;
   }
-
+  setIsRetrying(true);
   setAnswers({});
   setSubmitted(false);
   setScore(0);
@@ -506,7 +509,7 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
 
   await checkAttempts();
 
-
+  localStorage.setItem("quiz_tab_switches", "0");
   localStorage.removeItem("quiz_answers");
   localStorage.removeItem("quiz_time_left");
   localStorage.removeItem("quiz_start_time");
