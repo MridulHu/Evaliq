@@ -63,6 +63,12 @@ export default function QuizAttempt() {
         }
       }
 
+      localStorage.setItem(
+        "creator_quiz_start_time",
+        Date.now().toString()
+      );
+
+
       if (qs) setQuestions(qs);
 
       setLoading(false);
@@ -75,7 +81,7 @@ export default function QuizAttempt() {
      TIMER COUNTDOWN EFFECT
   -------------------------------------------- */
   useEffect(() => {
-    if (!timeLeft) return;
+    if (timeLeft === null) return;
     if (submitted) return;
 
     // Stop if already finished
@@ -134,6 +140,26 @@ export default function QuizAttempt() {
     setScore(correct);
     setSubmitted(true);
 
+    let timeTakenSeconds = 0;
+
+    // Option 1: Timer-based quiz
+    if (durationMinutes && timeLeft !== null) {
+      timeTakenSeconds = durationMinutes * 60 - timeLeft;
+    }
+
+    // Option 2: Backup using start timestamp
+    const startTime = localStorage.getItem("creator_quiz_start_time");
+
+    if (startTime) {
+      timeTakenSeconds = Math.floor(
+        (Date.now() - Number(startTime)) / 1000
+      );
+    }
+
+    // Prevent saving 0 seconds
+    timeTakenSeconds = Math.max(timeTakenSeconds, 1);
+
+
     // Save attempt
     await supabase.from("quiz_attempts").insert({
       quiz_id: quizId!,
@@ -142,7 +168,9 @@ export default function QuizAttempt() {
       answers,
       score: correct,
       total_questions: questions.length,
+      time_taken_seconds: timeTakenSeconds,
     });
+    localStorage.removeItem("creator_quiz_start_time");
   };
 
   const optionLabels = ["A", "B", "C", "D"];
@@ -157,6 +185,8 @@ export default function QuizAttempt() {
       </div>
     );
   }
+
+  
 
   /* --------------------------------------------
      MAIN UI
@@ -227,6 +257,10 @@ export default function QuizAttempt() {
                   if (durationMinutes) {
                     setTimeLeft(durationMinutes * 60);
                   }
+                  localStorage.setItem(
+                  "creator_quiz_start_time",
+                  Date.now().toString()
+                );
                 }}
               >
                 Retry Quiz
@@ -255,15 +289,31 @@ export default function QuizAttempt() {
                     "border-border hover:border-primary/30";
 
                   if (submitted) {
-                    if (isCorrect)
+                    if (isCorrect) {
                       borderClass =
                         "border-accent bg-accent/10 ring-1 ring-accent";
-                    else if (isSelected && !isCorrect)
+                    } else if (isSelected && !isCorrect) {
                       borderClass =
                         "border-destructive bg-destructive/10 ring-1 ring-destructive";
+                    }
                   } else if (isSelected) {
                     borderClass =
                       "border-primary bg-primary/10 ring-1 ring-primary";
+                  }
+
+                  // ✅ Circle Color Logic (A/B/C/D)
+                  let circleClass = "bg-muted text-muted-foreground";
+
+                  if (!submitted && isSelected) {
+                    circleClass = "bg-primary text-primary-foreground";
+                  }
+
+                  if (submitted && isCorrect) {
+                    circleClass = "bg-accent text-accent-foreground";
+                  }
+
+                  if (submitted && isSelected && !isCorrect) {
+                    circleClass = "bg-destructive text-destructive-foreground";
                   }
 
                   return (
@@ -273,9 +323,14 @@ export default function QuizAttempt() {
                       disabled={submitted}
                       className={`flex items-center gap-2 rounded-lg border p-3 text-left transition-all ${borderClass}`}
                     >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold bg-muted">
+                      {/* ✅ Colored Circle */}
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${circleClass}`}
+                      >
                         {optionLabels[oIndex]}
                       </span>
+
+                      {/* Option Text */}
                       <span className="text-sm">{opt}</span>
                     </button>
                   );

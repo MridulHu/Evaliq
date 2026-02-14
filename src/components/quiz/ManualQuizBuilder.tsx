@@ -198,7 +198,7 @@ export default function ManualQuizBuilder({
                     {optionLabels[oIndex]}
                   </span>
                   <Input
-                    className="border-0 bg-transparent p-0 h-auto focus-visible:ring-0"
+                    className="border-0 bg-transparent p-0 h-auto focus-visible:ring-0 pl-1"
                     placeholder={`Option ${optionLabels[oIndex]}`}
                     value={opt}
                     onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}

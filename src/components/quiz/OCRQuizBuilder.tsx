@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Upload, Loader2, Plus, ArrowRight } from "lucide-react";
 import ManualQuizBuilder from "./ManualQuizBuilder";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface GeneratedQuestion {
   question_text: string;
@@ -93,115 +95,132 @@ export default function OCRQuizBuilder() {
   }
 
   return (
-    <div className="max-w-md mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="text-center mb-6">
-        <div className="h-16 w-16 rounded-2xl gradient-accent flex items-center justify-center mx-auto mb-4">
-          <FileText className="h-8 w-8 text-accent-foreground" />
+  <div className="max-w-lg mx-auto animate-fade-in">
+    <Card className="glass-card rounded-2xl shadow-xl">
+      <CardContent className="p-8 space-y-8">
+
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <div className="h-16 w-16 rounded-2xl gradient-accent flex items-center justify-center mx-auto shadow-md">
+            <FileText className="h-8 w-8 text-accent-foreground" />
+          </div>
+
+          <h2 className="font-display text-3xl font-bold">
+            Import from Document
+          </h2>
+
+          <p className="text-sm text-muted-foreground">
+            Upload images or PDFs and instantly extract quiz questions.
+          </p>
         </div>
 
-        <h2 className="font-display text-2xl font-bold">
-          Import from Document
-        </h2>
+        {/* Hidden File Input */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,.pdf"
+          className="hidden"
+          onChange={handleFile}
+        />
 
-        <p className="text-muted-foreground mt-1">
-          Upload multiple images/PDFs to extract quiz questions.
-        </p>
-      </div>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,.pdf"
-        className="hidden"
-        onChange={handleFile}
-      />
-
-      {/* Upload Box */}
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={processing}
-        className="w-full glass-card rounded-xl p-8 flex flex-col items-center gap-3 hover:shadow-xl transition-all border-2 border-dashed border-border hover:border-primary/40"
-      >
-        {processing ? (
-          <>
-            <Loader2 className="h-10 w-10 text-primary animate-spin" />
-            <p className="font-medium">Processing {fileName}...</p>
-            <p className="text-sm text-muted-foreground">
-              Extracting questions...
-            </p>
-          </>
-        ) : (
-          <>
-            <Upload className="h-10 w-10 text-muted-foreground" />
-            <p className="font-medium">
-              {generatedQuestions.length === 0
-                ? "Click to upload"
-                : "Add another document"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Supports images (JPG, PNG) and PDF files
-            </p>
-          </>
-        )}
-      </button>
-
-      {/* Show extracted count */}
-      {generatedQuestions.length > 0 && (
-      <div className="glass-card rounded-xl p-5 space-y-4">
-        {/* Extracted Count */}
-        <p className="font-semibold text-center">
-          {generatedQuestions.length} questions extracted so far
-        </p>
-
-        {/* Preview Box */}
-        <div className="max-h-64 overflow-y-auto rounded-lg border border-border p-3 space-y-3 bg-muted/30">
-          {generatedQuestions.slice(0, 5).map((q, index) => (
-            <div key={index} className="text-sm space-y-1">
-              <p className="font-medium">
-                {index + 1}. {q.question_text}
+        {/* Upload Dropzone */}
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={processing}
+          className={`w-full rounded-2xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 transition-all
+            ${
+              processing
+                ? "border-primary/50 bg-primary/5"
+                : "border-border hover:border-primary/40 hover:bg-muted/30"
+            }
+          `}
+        >
+          {processing ? (
+            <>
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="font-semibold text-base">
+                Processing {fileName}...
               </p>
-
-              <ul className="ml-4 list-disc text-muted-foreground">
-                {q.options.map((opt, i) => (
-                  <li key={i}>{opt}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-
-          {/* If More Than 5 */}
-          {generatedQuestions.length > 5 && (
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Showing first 5 questions... Continue to edit full quiz.
-            </p>
+              <p className="text-xs text-muted-foreground">
+                Extracting questions, please wait
+              </p>
+            </>
+          ) : (
+            <>
+              <Upload className="h-10 w-10 text-muted-foreground" />
+              <p className="font-semibold text-base">
+                {generatedQuestions.length === 0
+                  ? "Click to upload a document"
+                  : "Upload another document"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Supports JPG, PNG, and PDF files
+              </p>
+            </>
           )}
-        </div>
+        </button>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 justify-center">
-          {/* Add More */}
-          <Button
-            variant="outline"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add More
-          </Button>
+        {/* Extracted Questions Preview */}
+        {generatedQuestions.length > 0 && (
+          <div className="space-y-5">
 
-          {/* Continue */}
-          <Button
-            className="gradient-primary text-primary-foreground"
-            onClick={() => setReadyToEdit(true)}
-          >
-            Continue
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    )}
+            {/* Count Badge */}
+            <div className="flex justify-center">
+              <Badge className="px-4 py-1 text-sm rounded-full">
+                {generatedQuestions.length} Questions Extracted
+              </Badge>
+            </div>
 
-    </div>
-  );
+            {/* Preview Box */}
+            <div className="rounded-xl border bg-muted/20 p-4 max-h-72 overflow-y-auto space-y-4">
+              {generatedQuestions.slice(0, 5).map((q, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg p-3 bg-background/70 border shadow-sm"
+                >
+                  <p className="font-medium text-sm">
+                    {index + 1}. {q.question_text}
+                  </p>
+
+                  <ul className="mt-2 ml-5 list-disc text-xs text-muted-foreground space-y-1">
+                    {q.options.map((opt, i) => (
+                      <li key={i}>{opt}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              {generatedQuestions.length > 5 && (
+                <p className="text-xs text-muted-foreground text-center pt-2">
+                  Showing first 5 questions... Continue to edit the full quiz.
+                </p>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 justify-center pt-2">
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add More
+              </Button>
+
+              <Button
+                className="rounded-xl gradient-primary text-primary-foreground"
+                onClick={() => setReadyToEdit(true)}
+              >
+                Continue
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
 }

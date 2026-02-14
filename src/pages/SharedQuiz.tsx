@@ -223,30 +223,27 @@ export default function SharedQuiz() {
 
   const handleVisibilityChange = () => {
     if (document.hidden) {
-      setWarningCount((prev) => {
-        const next = prev + 1;
+  const next = incrementTabSwitch(); // ✅ SAVE instantly
 
-        toast({
-          title: "Warning: Tab/App Switch Detected",
-          description: `Warnings left: ${Math.max(tabWarnings - next, 0)}`,
-          variant: "destructive",
-          duration: Infinity,
-        });
+  toast({
+    title: "Warning: Tab/App Switch Detected",
+    description: `Warnings left: ${Math.max(tabWarnings - next, 0)}`,
+    variant: "destructive",
+    duration: Infinity,
+  });
 
-        // ✅ Auto-submit after limit reached
-        if (next >= tabWarnings) {
-          toast({
-            title: "Auto Submitted",
-            description: "Too many tab/app switches detected.",
-            variant: "destructive",
-          });
+  // ✅ Auto-submit after limit reached
+  if (next >= tabWarnings) {
+    toast({
+      title: "Auto Submitted",
+      description: "Too many tab/app switches detected.",
+      variant: "destructive",
+    });
 
-          handleSubmit(true);
-        }
+    handleSubmit(true);
+  }
+}
 
-        return next;
-      });
-    }
   };
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -349,6 +346,10 @@ useEffect(() => {
             onClick={async () => {
               localStorage.setItem("quiz_participant", participantName);
 
+              localStorage.setItem("quiz_tab_switches", "0");
+              setWarningCount(0);
+
+
               await checkAttempts();
 
               if (!blocked) {
@@ -379,6 +380,17 @@ useEffect(() => {
 
     return updated;
   });
+};
+
+
+const incrementTabSwitch = () => {
+  const current = Number(localStorage.getItem("quiz_tab_switches") || "0");
+  const next = current + 1;
+
+  localStorage.setItem("quiz_tab_switches", next.toString());
+  setWarningCount(next);
+
+  return next;
 };
 
 
@@ -423,6 +435,34 @@ useEffect(() => {
     setScore(correct);
     setSubmitted(true);
 
+    let timeTakenSeconds = 0;
+
+// Read remaining time from localStorage (auto-submit safe)
+const savedTimeLeft = localStorage.getItem("quiz_time_left");
+
+// If quiz has a duration timer
+if (durationMinutes && savedTimeLeft) {
+  timeTakenSeconds =
+    durationMinutes * 60 - Number(savedTimeLeft);
+}
+
+// Backup fallback (only if duration not enabled)
+else {
+  const startTime = localStorage.getItem("quiz_start_time");
+
+  if (startTime) {
+    timeTakenSeconds = Math.floor(
+      (Date.now() - Number(startTime)) / 1000
+    );
+  }
+}
+
+// Never allow 0 seconds
+timeTakenSeconds = Math.max(timeTakenSeconds, 1);
+
+
+
+
     await supabase.from("quiz_attempts").insert({
       quiz_id: quizId,
       user_id: null,
@@ -430,15 +470,23 @@ useEffect(() => {
       answers: latestAnswers,
       score: correct,
       total_questions: latestQuestions.length,
+      time_taken_seconds: timeTakenSeconds,
+      tab_switch_count: Number(
+      localStorage.getItem("quiz_tab_switches") || "0"
+      ),
     });
 
     await checkAttempts();
+    setWarningCount(0);
+
 
     // ✅ Clear stored progress after submission
     localStorage.removeItem("quiz_answers");
     localStorage.removeItem("quiz_start_time");
     localStorage.removeItem("quiz_time_left");
     localStorage.removeItem("quiz_questions");
+    localStorage.removeItem("quiz_tab_switches");
+
   };
 
   /* --------------------------------------------
@@ -454,10 +502,17 @@ useEffect(() => {
   setAnswers({});
   setSubmitted(false);
   setScore(0);
+  setWarningCount(0);
+
+  await checkAttempts();
+
 
   localStorage.removeItem("quiz_answers");
   localStorage.removeItem("quiz_time_left");
   localStorage.removeItem("quiz_start_time");
+  localStorage.removeItem("quiz_questions");
+  
+  
 
   if (durationMinutes) {
     const freshTime = durationMinutes * 60;
@@ -467,9 +522,6 @@ useEffect(() => {
     // Save fresh timer immediately
     localStorage.setItem("quiz_time_left", freshTime.toString());
   }
-
-  //  Recheck attempts count
-  await checkAttempts();
 
   //  Reload page cleanly
   window.location.reload();

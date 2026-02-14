@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { Switch } from "@/components/ui/switch";
+
 
 import {
   Brain,
@@ -409,162 +411,207 @@ export default function Dashboard() {
           ✅ SETTINGS MODAL OVERLAY
       ========================================= */}
       {settingsOpen && selectedQuiz && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl animate-scale-in">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-xl font-bold">
-                Quiz Settings
-              </h2>
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl overflow-hidden animate-scale-in">
 
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setSettingsOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+      {/* ✅ HEADER */}
+      <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div>
+          <h2 className="font-display text-xl font-bold">
+            Quiz Settings
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Configure quiz rules, retries, access & exam security
+          </p>
+        </div>
 
-            {/* Duration */}
-            <div className="space-y-2 mb-4">
-              <label className="font-semibold text-sm">
-                Duration (minutes)
-              </label>
-              <Input
-                type="number"
-                placeholder="Leave empty for unlimited"
-                value={duration ?? ""}
-                onChange={(e) =>
-                  setDuration(
-                    e.target.value ? Number(e.target.value) : null
-                  )
-                }
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* ✅ BODY */}
+      <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+
+        {/* -------------------------------
+            SECTION 1: TIMER
+        -------------------------------- */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Time Limit
+          </h3>
+
+          <div className="rounded-xl border p-3 space-y-2">
+            <label className="text-sm font-medium ml-1">
+              Duration (minutes)
+            </label>
+
+            <Input
+              type="number"
+              placeholder="Leave empty or 0 for unlimited"
+              value={duration ?? ""}
+              className="text-sm"
+              onChange={(e) =>
+                setDuration(e.target.value ? Number(e.target.value) : null)
+              }
+            />
+          </div>
+        </div>
+
+        {/* -------------------------------
+            SECTION 2: RETRIES
+        -------------------------------- */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Attempts & Retries
+          </h3>
+
+          <div className="rounded-xl border p-4 space-y-4">
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Retries</p>
+                <p className="text-xs text-muted-foreground">
+                  Allow participants to retake this quiz
+                </p>
+              </div>
+
+              <Switch
+                checked={retriesEnabled}
+                onCheckedChange={setRetriesEnabled}
               />
             </div>
 
-            {/* Retries */}
-            <div className="space-y-2 mb-4">
-              <label className="font-semibold text-sm">
-                Enable Retries
-              </label>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={retriesEnabled}
-                  onChange={(e) => setRetriesEnabled(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm text-muted-foreground">
-                  Allow users to retry quiz
-                </span>
-              </div>
-
-              {retriesEnabled && (
-                <Input
-                  type="number"
-                  min={1}
-                  value={maxRetries}
-                  onChange={(e) => setMaxRetries(Number(e.target.value))}
-                  placeholder="Max retries"
-                />
-              )}
-            </div>
-            {/* ✅ Sharing Enabled */}
-            <div className="space-y-2 mb-4">
-              <label className="font-semibold text-sm">
-                Enable Access
-              </label>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={sharingEnabled}
-                  onChange={(e) => setSharingEnabled(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm text-muted-foreground">
-                  Allow quiz to be accessed by link
-                </span>
-              </div>
-            </div>
-
-            {/* ✅ Show Answers */}
-            <div className="space-y-2 mb-4">
-              <label className="font-semibold text-sm">
-                Show Correct Answers After Quiz
-              </label>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={showAnswers}
-                  onChange={(e) => setShowAnswers(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm text-muted-foreground">
-                  Disable this for not reveal answers at the end
-                </span>
-              </div>
-              <div className="space-y-2 mb-4">
-                <label className="font-semibold text-sm">
-                  Prevent Tab / App Switching
-                </label>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={preventTabSwitch}
-                    onChange={(e) => setPreventTabSwitch(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    Auto-submit if user switches tabs/apps
-                  </span>
-                </div>
-
-                {preventTabSwitch && (
-                  <Input
-                    type="number"
-                    min={1}
-                    value={tabWarnings}
-                    onChange={(e) => setTabWarnings(Number(e.target.value))}
-                    placeholder="Warnings before auto-submit"
-                  />
-                )}
-              </div>
-              <div className="space-y-2 mb-4">
-                <label className="font-semibold text-sm">
-                  Disable Copy / Paste
-                </label>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={preventCopyPaste}
-                    onChange={(e) => setPreventCopyPaste(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    Prevent copying questions or pasting answers
-                  </span>
-                </div>
-              </div>
-
-
-            </div>
-            {/* Save */}
-            <Button
-              className="w-full gradient-primary text-primary-foreground"
-              onClick={saveSettings}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Save Settings
-            </Button>
+            {retriesEnabled && (
+              <Input
+                type="number"
+                min={1}
+                value={maxRetries}
+                onChange={(e) => setMaxRetries(Number(e.target.value))}
+                placeholder="Max retries allowed"
+              />
+            )}
           </div>
         </div>
-      )}
+
+        {/* -------------------------------
+            SECTION 3: ACCESS CONTROL
+        -------------------------------- */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Access & Visibility
+          </h3>
+
+          <div className="rounded-xl border p-4 space-y-4">
+
+            {/* Sharing */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Access Link</p>
+                <p className="text-xs text-muted-foreground">
+                  Quiz can be opened via share link
+                </p>
+              </div>
+
+              <Switch
+                checked={sharingEnabled}
+                onCheckedChange={setSharingEnabled}
+              />
+            </div>
+
+            {/* Show Answers */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Show Correct Answers</p>
+                <p className="text-xs text-muted-foreground">
+                  Answer visibility after quiz completion
+                </p>
+              </div>
+
+              <Switch
+                checked={showAnswers}
+                onCheckedChange={setShowAnswers}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* -------------------------------
+            SECTION 4: EXAM SECURITY
+        -------------------------------- */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Exam Security
+          </h3>
+
+          <div className="rounded-xl border p-4 space-y-4">
+
+            {/* Tab Switch */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">
+                  Prevent Tab/App Switching
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Auto-submit with adjustable warnings
+                </p>
+              </div>
+
+              <Switch
+                checked={preventTabSwitch}
+                onCheckedChange={setPreventTabSwitch}
+              />
+            </div>
+
+            {preventTabSwitch && (
+              <Input
+                type="number"
+                min={1}
+                value={tabWarnings}
+                onChange={(e) => setTabWarnings(Number(e.target.value))}
+                placeholder="Warnings before auto-submit"
+              />
+            )}
+
+            {/* Copy Paste */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">
+                  Disable Copy / Paste
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Prevent right click and text selection
+                </p>
+              </div>
+
+              <Switch
+                checked={preventCopyPaste}
+                onCheckedChange={setPreventCopyPaste}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ FOOTER */}
+      <div className="px-6 py-4 border-t bg-muted/30">
+        <Button
+          className="w-full gradient-primary text-primary-foreground"
+          onClick={saveSettings}
+        >
+          <Save className="mr-2 h-4 w-4" />
+          Save Settings
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+
+
     </div>
   );
 }
