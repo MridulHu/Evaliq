@@ -2,8 +2,19 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Brain, CheckCircle2, Timer } from "lucide-react";
+import { Brain, CheckCircle2, Timer, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Question {
   id: string;
@@ -20,9 +31,8 @@ export default function SharedQuiz() {
   const [quizTitle, setQuizTitle] = useState("");
   const [quizId, setQuizId] = useState("");
   const [questions, setQuestions] = useState<Question[]>(() => {
-  return JSON.parse(localStorage.getItem("quiz_questions") || "[]");
-});
-
+    return JSON.parse(localStorage.getItem("quiz_questions") || "[]");
+  });
 
   // ✅ Persist answers (refresh proof)
   const [answers, setAnswers] = useState<Record<string, number>>(() => {
@@ -37,11 +47,11 @@ export default function SharedQuiz() {
 
   // ✅ Persist participant + started state
   const [participantName, setParticipantName] = useState(
-    localStorage.getItem("quiz_participant") || ""
+    localStorage.getItem("quiz_participant") || "",
   );
 
   const [started, setStarted] = useState(
-    localStorage.getItem("quiz_started") === "true"
+    localStorage.getItem("quiz_started") === "true",
   );
 
   // ✅ TIMER FIX
@@ -52,17 +62,22 @@ export default function SharedQuiz() {
   const [maxRetries, setMaxRetries] = useState(0);
   const [attemptCount, setAttemptCount] = useState(0);
   const [blocked, setBlocked] = useState(false);
-  const retriesLeft = Math.max(maxRetries - attemptCount, 0);
+  const retriesLeft =
+    maxRetries === 0 ? 0 : Math.max(maxRetries - attemptCount, 0);
 
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [showAnswers, setShowAnswers] = useState(true);
   const [preventTabSwitch, setPreventTabSwitch] = useState(false);
   const [tabWarnings, setTabWarnings] = useState(3);
   const [preventCopyPaste, setPreventCopyPaste] = useState(false);
+  const [randomiseQuestions, setRandomiseQuestions] = useState(false);
   const [warningCount, setWarningCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-
-
+  const [showResults, setShowResults] = useState(false);
+  const [openSubmitDialog, setOpenSubmitDialog] = useState(false);
+  const [openNavDialog, setOpenNavDialog] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
 
   /* --------------------------------------------
      LOAD QUIZ + SETTINGS
@@ -73,7 +88,9 @@ export default function SharedQuiz() {
 
       const { data: quiz } = await supabase
         .from("quizzes")
-        .select("id, title, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste")
+        .select(
+          "id, title, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste,randomise_questions",
+        )
         .eq("share_token", shareToken)
         .maybeSingle();
 
@@ -87,13 +104,14 @@ export default function SharedQuiz() {
         setLoading(false);
         return;
       }
-      
+
       /* ✅ Save settings */
       setSharingEnabled(quiz.sharing_enabled ?? true);
       setShowAnswers(quiz.show_answers ?? true);
       setPreventTabSwitch(quiz.prevent_tab_switch ?? false);
       setTabWarnings(quiz.tab_switch_warnings ?? 3);
       setPreventCopyPaste(quiz.prevent_copy_paste ?? false);
+      setRandomiseQuestions(quiz.randomise_questions ?? false);
 
       setQuizTitle(quiz.title);
       setQuizId(quiz.id);
@@ -115,7 +133,6 @@ export default function SharedQuiz() {
         }
       }
 
-
       const { data: qs } = await supabase
         .from("questions")
         .select("*")
@@ -123,13 +140,20 @@ export default function SharedQuiz() {
         .order("order_num");
 
       if (qs) {
-  setQuestions(qs);
+        let finalQuestions = qs;
 
-  // ✅ Save questions for auto-submit scoring
-  localStorage.setItem("quiz_questions", JSON.stringify(qs));
-}
+        // ✅ Randomise only if enabled
+        if (quiz.randomise_questions) {
+          finalQuestions = [...qs].sort(() => Math.random() - 0.5);
+        }
 
-      
+        // ✅ Save into state
+        setQuestions(finalQuestions);
+
+        // ✅ Save into localStorage for auto-submit safety
+        localStorage.setItem("quiz_questions", JSON.stringify(finalQuestions));
+      }
+
       setLoading(false);
     };
 
@@ -147,8 +171,9 @@ export default function SharedQuiz() {
      CHECK ATTEMPTS (refresh proof)
   -------------------------------------------- */
   const checkAttempts = async () => {
-    if (maxRetries === 0) return;
+    if (!quizId || !participantName.trim()) return;
 
+    // Count how many times this participant already submitted
     const { count } = await supabase
       .from("quiz_attempts")
       .select("*", { count: "exact", head: true })
@@ -158,6 +183,17 @@ export default function SharedQuiz() {
     const attempts = count || 0;
     setAttemptCount(attempts);
 
+    // ✅ Case 1: Retries disabled → only ONE submission allowed
+    if (maxRetries === 0) {
+      if (attempts >= 1) {
+        setBlocked(true);
+      } else {
+        setBlocked(false);
+      }
+      return;
+    }
+
+    // ✅ Case 2: Retries enabled → allow up to maxRetries
     if (attempts >= maxRetries) {
       setBlocked(true);
     } else {
@@ -165,23 +201,31 @@ export default function SharedQuiz() {
     }
   };
 
-  /* ✅ Auto-block after refresh if exhausted */
+  /* Auto-block after refresh if exhausted */
   useEffect(() => {
-    if (quizId && participantName.trim() && maxRetries > 0) {
-      checkAttempts();
+    if (quizId && participantName.trim()) {
+      checkAttempts(); // Always check, even when maxRetries = 0
     }
   }, [quizId, participantName, maxRetries]);
 
-  /* ✅ Toast immediately when blocked */
+  /*  Toast immediately when blocked */
   useEffect(() => {
-    if (blocked) {
-      toast({
-        title: "Maximum retries reached",
-        description: "You can no longer submit this quiz.",
-        variant: "destructive",
-      });
-    }
-  }, [blocked]);
+    if (!blocked) return;
+
+    toast({
+      title:
+        maxRetries === 0
+          ? "Submission already completed"
+          : "Maximum retries reached",
+
+      description:
+        maxRetries === 0
+          ? "This quiz allows only one attempt. You can no longer submit."
+          : "You can no longer submit this quiz.",
+
+      variant: "destructive",
+    });
+  }, [blocked, maxRetries]);
 
   /* --------------------------------------------
      TIMER COUNTDOWN + AUTO SUBMIT
@@ -199,7 +243,7 @@ export default function SharedQuiz() {
         duration: Infinity,
       });
       setTimeout(() => {
-      handleSubmit(true);
+        handleSubmit(true);
       }, 200);
 
       return;
@@ -213,84 +257,80 @@ export default function SharedQuiz() {
   }, [timeLeft, submitted, started]);
 
   useEffect(() => {
-  if (timeLeft === null) return;
+    if (timeLeft === null) return;
 
-  localStorage.setItem("quiz_time_left", timeLeft.toString());
-}, [timeLeft]);
+    localStorage.setItem("quiz_time_left", timeLeft.toString());
+  }, [timeLeft]);
 
   useEffect(() => {
-  if (!preventTabSwitch) return;
-  if (submitted) return;
-  if (!started) return;
-  if (isRetrying) return;
+    if (!preventTabSwitch) return;
+    if (submitted) return;
+    if (!started) return;
+    if (isRetrying) return;
 
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-  const next = incrementTabSwitch(); // ✅ SAVE instantly
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        const next = incrementTabSwitch(); // ✅ SAVE instantly
 
-  toast({
-    title: "Warning: Tab/App Switch Detected",
-    description: `Warnings left: ${Math.max(tabWarnings - next, 0)}`,
-    variant: "destructive",
-    duration: Infinity,
-  });
+        toast({
+          title: "Warning: Tab/App Switch Detected",
+          description: `Warnings left: ${Math.max(tabWarnings - next, 0)}`,
+          variant: "destructive",
+          duration: Infinity,
+        });
 
-  // ✅ Auto-submit after limit reached
-  if (next >= tabWarnings) {
-    toast({
-      title: "Auto Submitted",
-      description: "Too many tab/app switches detected.",
-      variant: "destructive",
-    });
+        // ✅ Auto-submit after limit reached
+        if (next >= tabWarnings) {
+          toast({
+            title: "Auto Submitted",
+            description: "Too many tab/app switches detected.",
+            variant: "destructive",
+          });
 
-    handleSubmit(true);
-  }
-}
+          handleSubmit(true);
+        }
+      }
+    };
 
-  };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [preventTabSwitch, tabWarnings, submitted, started, toast, isRetrying]);
 
-  return () => {
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-  };
-}, [preventTabSwitch, tabWarnings, submitted, started, toast, isRetrying]);
+  useEffect(() => {
+    if (!preventCopyPaste) return;
 
+    const blockKeys = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ["c", "v", "x", "a"].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+      }
+    };
 
-useEffect(() => {
-  if (!preventCopyPaste) return;
+    document.addEventListener("keydown", blockKeys);
 
-  const blockKeys = (e: KeyboardEvent) => {
-    if (
-      (e.ctrlKey || e.metaKey) &&
-      ["c", "v", "x", "a"].includes(e.key.toLowerCase())
-    ) {
+    return () => {
+      document.removeEventListener("keydown", blockKeys);
+    };
+  }, [preventCopyPaste]);
+
+  useEffect(() => {
+    if (!preventCopyPaste) return;
+
+    const blockRightClick = (e: MouseEvent) => {
       e.preventDefault();
-    }
-  };
+    };
 
-  document.addEventListener("keydown", blockKeys);
+    document.addEventListener("contextmenu", blockRightClick, true);
 
-  return () => {
-    document.removeEventListener("keydown", blockKeys);
-  };
-}, [preventCopyPaste]);
-
-useEffect(() => {
-  if (!preventCopyPaste) return;
-
-  const blockRightClick = (e: MouseEvent) => {
-    e.preventDefault();
-  };
-
-  document.addEventListener("contextmenu", blockRightClick, true);
-
-  return () => {
-    document.removeEventListener("contextmenu", blockRightClick, true);
-  };
-}, [preventCopyPaste]);
-
-
+    return () => {
+      document.removeEventListener("contextmenu", blockRightClick, true);
+    };
+  }, [preventCopyPaste]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -303,20 +343,18 @@ useEffect(() => {
   -------------------------------------------- */
 
   if (notFound) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="glass-card p-8 rounded-xl text-center max-w-md">
-        <h2 className="text-2xl font-bold mb-2">
-          Quiz Not Available
-        </h2>
-        <p className="text-muted-foreground">
-          This quiz link is invalid or sharing has been disabled by the creator.
-        </p>
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="glass-card p-8 rounded-xl text-center max-w-md">
+          <h2 className="text-2xl font-bold mb-2">Quiz Not Available</h2>
+          <p className="text-muted-foreground">
+            This quiz link is invalid or sharing has been disabled by the
+            creator.
+          </p>
+        </div>
       </div>
-    </div>
-  );
-}
-
+    );
+  }
 
   if (!started) {
     return (
@@ -352,7 +390,6 @@ useEffect(() => {
               localStorage.setItem("quiz_tab_switches", "0");
               setWarningCount(0);
 
-
               await checkAttempts();
 
               if (!blocked) {
@@ -373,29 +410,42 @@ useEffect(() => {
      SELECT ANSWER (unchanged)
   -------------------------------------------- */
   const selectAnswer = (questionId: string, optionIndex: number) => {
-  if (submitted) return;
+    if (submitted) return;
 
-  setAnswers((prev) => {
-    const updated = { ...prev, [questionId]: optionIndex };
+    setAnswers((prev) => {
+      const updated = { ...prev, [questionId]: optionIndex };
 
-    // ✅ Save instantly (so auto-submit never misses)
-    localStorage.setItem("quiz_answers", JSON.stringify(updated));
+      // ✅ Save instantly (so auto-submit never misses)
+      localStorage.setItem("quiz_answers", JSON.stringify(updated));
 
-    return updated;
-  });
-};
+      return updated;
+    });
+  };
 
+  const incrementTabSwitch = () => {
+    const current = Number(localStorage.getItem("quiz_tab_switches") || "0");
+    const next = current + 1;
 
-const incrementTabSwitch = () => {
-  const current = Number(localStorage.getItem("quiz_tab_switches") || "0");
-  const next = current + 1;
+    localStorage.setItem("quiz_tab_switches", next.toString());
+    setWarningCount(next);
 
-  localStorage.setItem("quiz_tab_switches", next.toString());
-  setWarningCount(next);
+    return next;
+  };
 
-  return next;
-};
+  //  Count unanswered questions
+  const unansweredCount = questions.length - Object.keys(answers).length;
 
+  // ✅ Handles submit button click
+  const handleSubmitClick = () => {
+    // If unanswered questions exist, open confirmation modal
+    if (unansweredCount > 0) {
+      setOpenSubmitDialog(true);
+      return;
+    }
+
+    // Otherwise submit directly
+    handleSubmit(false);
+  };
 
   /* --------------------------------------------
      SUBMIT QUIZ (BLOCKED FIX ADDED)
@@ -410,61 +460,48 @@ const incrementTabSwitch = () => {
       return;
     }
 
-    if (!auto && Object.keys(answers).length < questions.length) {  
-      toast({ title: "Please answer all questions", variant: "destructive" });
-      return;
-    }
-
-    const latestAnswers: Record<string, number> =
-    auto
+    const latestAnswers: Record<string, number> = auto
       ? JSON.parse(localStorage.getItem("quiz_answers") || "{}")
       : answers;
 
     // ✅ Always use latest questions (state OR localStorage)
-      const latestQuestions: Question[] =
-        questions.length > 0
-          ? questions
-          : JSON.parse(localStorage.getItem("quiz_questions") || "[]");
+    const latestQuestions: Question[] =
+      questions.length > 0
+        ? questions
+        : JSON.parse(localStorage.getItem("quiz_questions") || "[]");
 
-      let correct = 0;
+    let correct = 0;
 
-      latestQuestions.forEach((q) => {
-        if (latestAnswers[q.id] === q.correct_option_index) {
-          correct++;
-        }
-      });
-
+    latestQuestions.forEach((q) => {
+      if (latestAnswers[q.id] === q.correct_option_index) {
+        correct++;
+      }
+    });
 
     setScore(correct);
     setSubmitted(true);
 
     let timeTakenSeconds = 0;
 
-// Read remaining time from localStorage (auto-submit safe)
-const savedTimeLeft = localStorage.getItem("quiz_time_left");
+    // Read remaining time from localStorage (auto-submit safe)
+    const savedTimeLeft = localStorage.getItem("quiz_time_left");
 
-// If quiz has a duration timer
-if (durationMinutes && savedTimeLeft) {
-  timeTakenSeconds =
-    durationMinutes * 60 - Number(savedTimeLeft);
-}
+    // If quiz has a duration timer
+    if (durationMinutes && savedTimeLeft) {
+      timeTakenSeconds = durationMinutes * 60 - Number(savedTimeLeft);
+    }
 
-// Backup fallback (only if duration not enabled)
-else {
-  const startTime = localStorage.getItem("quiz_start_time");
+    // Backup fallback (only if duration not enabled)
+    else {
+      const startTime = localStorage.getItem("quiz_start_time");
 
-  if (startTime) {
-    timeTakenSeconds = Math.floor(
-      (Date.now() - Number(startTime)) / 1000
-    );
-  }
-}
+      if (startTime) {
+        timeTakenSeconds = Math.floor((Date.now() - Number(startTime)) / 1000);
+      }
+    }
 
-// Never allow 0 seconds
-timeTakenSeconds = Math.max(timeTakenSeconds, 1);
-
-
-
+    // Never allow 0 seconds
+    timeTakenSeconds = Math.max(timeTakenSeconds, 1);
 
     await supabase.from("quiz_attempts").insert({
       quiz_id: quizId,
@@ -475,13 +512,12 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
       total_questions: latestQuestions.length,
       time_taken_seconds: timeTakenSeconds,
       tab_switch_count: Number(
-      localStorage.getItem("quiz_tab_switches") || "0"
+        localStorage.getItem("quiz_tab_switches") || "0",
       ),
     });
 
     await checkAttempts();
     setWarningCount(0);
-
 
     // ✅ Clear stored progress after submission
     localStorage.removeItem("quiz_answers");
@@ -489,66 +525,113 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
     localStorage.removeItem("quiz_time_left");
     localStorage.removeItem("quiz_questions");
     localStorage.removeItem("quiz_tab_switches");
-
   };
 
   /* --------------------------------------------
      RETRY FIX
   -------------------------------------------- */
- const handleRetry = async () => {
-  if (maxRetries > 0 && attemptCount >= maxRetries) {
-    toast({ title: "No retries left", variant: "destructive" });
-    setBlocked(true);
-    return;
+  const handleRetry = async () => {
+    if (maxRetries > 0 && attemptCount >= maxRetries) {
+      toast({ title: "No retries left", variant: "destructive" });
+      setBlocked(true);
+      return;
+    }
+    setIsRetrying(true);
+    setAnswers({});
+    setSubmitted(false);
+    setScore(0);
+    setWarningCount(0);
+
+    await checkAttempts();
+
+    localStorage.setItem("quiz_tab_switches", "0");
+    localStorage.removeItem("quiz_answers");
+    localStorage.removeItem("quiz_time_left");
+    localStorage.removeItem("quiz_start_time");
+    localStorage.removeItem("quiz_questions");
+
+    if (durationMinutes) {
+      const freshTime = durationMinutes * 60;
+
+      setTimeLeft(freshTime);
+
+      // Save fresh timer immediately
+      localStorage.setItem("quiz_time_left", freshTime.toString());
+    }
+
+    //  Reload page cleanly
+    window.location.reload();
+  };
+
+  const optionLabels = ["A", "B", "C", "D"];
+
+  const scrollToQuestion = (index: number) => {
+  setCurrentQuestion(index);
+
+  const element = document.getElementById(`question-${index}`);
+
+  if (element) {
+    const headerOffset = 80; //  Adjust for sticky header height
+    const elementPosition = element.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.scrollY - headerOffset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: "smooth",
+    });
   }
-  setIsRetrying(true);
-  setAnswers({});
-  setSubmitted(false);
-  setScore(0);
-  setWarningCount(0);
 
-  await checkAttempts();
-
-  localStorage.setItem("quiz_tab_switches", "0");
-  localStorage.removeItem("quiz_answers");
-  localStorage.removeItem("quiz_time_left");
-  localStorage.removeItem("quiz_start_time");
-  localStorage.removeItem("quiz_questions");
-  
-  
-
-  if (durationMinutes) {
-    const freshTime = durationMinutes * 60;
-
-    setTimeLeft(freshTime);
-
-    // Save fresh timer immediately
-    localStorage.setItem("quiz_time_left", freshTime.toString());
-  }
-
-  //  Reload page cleanly
-  window.location.reload();
+  // Close navigator after click
+  setNavOpen(false);
 };
 
 
-  const optionLabels = ["A", "B", "C", "D"];
+  /* --------------------------------------------
+   AUTO-DETECT CURRENT QUESTION ON SCROLL
+-------------------------------------------- */
+  useEffect(() => {
+    if (questions.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute("data-index"));
+
+            setCurrentQuestion(index);
+          }
+        });
+      },
+      {
+        threshold: 0.6, // 60% visible = active
+      },
+    );
+
+    // Observe all question cards
+    questions.forEach((_, index) => {
+      const el = document.getElementById(`question-${index}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [questions]);
 
   /* --------------------------------------------
      MAIN UI (STYLING UNCHANGED)
   -------------------------------------------- */
   return (
     <div
-    className="min-h-screen bg-background"
-    style={{
-      userSelect: preventCopyPaste ? "none" : "auto",
-      WebkitUserSelect: preventCopyPaste ? "none" : "auto",
-    }}
-  >
+      className="min-h-screen bg-background"
+      style={{
+        userSelect: preventCopyPaste ? "none" : "auto",
+        WebkitUserSelect: preventCopyPaste ? "none" : "auto",
+      }}
+    >
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex min-h-[4rem] py-3 items-center justify-between">
           <div className="flex items-center gap-3">
             <Brain className="h-7 w-7 text-primary" />
-            <span className="font-display text-xl font-bold">QuizForge</span>
+            <span className="font-display text-lg font-bold ">{quizTitle}</span>
           </div>
 
           {durationMinutes && timeLeft !== null && !submitted && (
@@ -560,13 +643,7 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
         </div>
       </header>
 
-      <main className="container py-8 max-w-3xl">
-        <div className="mb-8 animate-fade-in">
-          <h1 className="font-display text-3xl font-bold">{quizTitle}</h1>
-          <p className="text-muted-foreground mt-1">
-            {questions.length} questions
-          </p>
-        </div>
+      <main className="container py-8 max-w-3xl mb-20 lg:max-w-5xl xl:max-w-6xl">
 
         {submitted && (
           <div className="glass-card rounded-xl p-6 mb-6 text-center animate-scale-in">
@@ -576,46 +653,46 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
             </h2>
 
             {maxRetries > 0 && !blocked && (
-            <>
-              {/* ✅ Retries Left Display */}
-              <p className="text-sm text-muted-foreground mt-2">
-                Retries left:{" "}
-                <span className="font-semibold">
-                  {retriesLeft}/{maxRetries}
-                </span>
-              </p>
+              <>
+                {/* ✅ Retries Left Display */}
+                <p className="text-sm text-muted-foreground mt-2">
+                  Retries left:{" "}
+                  <span className="font-semibold">
+                    {retriesLeft}/{maxRetries}
+                  </span>
+                </p>
 
-              <Button
-                className="mt-4 gradient-primary text-primary-foreground"
-                onClick={handleRetry}
-              >
-                Retry Quiz
-              </Button>
-            </>
-          )}
-
+                <Button
+                  className="mt-4 gradient-primary text-primary-foreground"
+                  onClick={handleRetry}
+                >
+                  Retry Quiz
+                </Button>
+              </>
+            )}
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-4 ">
           {questions.map((q, qIndex) => (
             <div
               key={q.id}
-              className="glass-card rounded-xl p-5 animate-fade-in"
+              id={`question-${qIndex}`}
+              data-index={qIndex}
+              className="scroll-mt-24 rounded-2xl border bg-card p-5 lg:p-7 shadow-sm hover:shadow-md transition animate-fade-in"
             >
               <p
                 className={`font-display font-semibold mb-3 ${
                   preventCopyPaste ? "no-copy" : ""
                 }`}
               >
-
                 <span className="text-muted-foreground mr-2">
                   {qIndex + 1}.
                 </span>
                 {q.question_text}
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3">
                 {q.options.map((opt, oIndex) => {
                   const isSelected = answers[q.id] === oIndex;
                   const isCorrect = q.correct_option_index === oIndex;
@@ -624,13 +701,15 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
 
                   // ✅ Selected option always stays blue (before + after submit)
                   if (isSelected) {
-                    borderClass = "border-primary bg-primary/10 ring-1 ring-primary";
+                    borderClass =
+                      "border-primary bg-primary/10 ring-1 ring-primary";
                   }
 
                   // ✅ Only reveal correct/wrong if showAnswers is enabled
                   if (submitted && showAnswers) {
                     if (isCorrect) {
-                      borderClass = "border-accent bg-accent/10 ring-1 ring-accent";
+                      borderClass =
+                        "border-accent bg-accent/10 ring-1 ring-accent";
                     } else if (isSelected && !isCorrect) {
                       borderClass =
                         "border-destructive bg-destructive/10 ring-1 ring-destructive";
@@ -651,24 +730,26 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
                             ? isSelected
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted text-muted-foreground"
-
-                            // ✅ Normal Mode: Show correct + wrong after submit
-                            : submitted && showAnswers
-                            ? isCorrect
-                              ? "bg-accent text-accent-foreground"
-                              : isSelected
-                              ? "bg-destructive text-destructive-foreground"
-                              : "bg-muted text-muted-foreground"
-
-                            // ✅ Before submission
-                            : isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
+                            : // ✅ Normal Mode: Show correct + wrong after submit
+                              submitted && showAnswers
+                              ? isCorrect
+                                ? "bg-accent text-accent-foreground"
+                                : isSelected
+                                  ? "bg-destructive text-destructive-foreground"
+                                  : "bg-muted text-muted-foreground"
+                              : // ✅ Before submission
+                                isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {optionLabels[oIndex]}
                       </span>
-                      <span className={`text-sm ${preventCopyPaste ? "no-copy" : ""}`}>{opt}</span>
+                      <span
+                        className={`text-sm ${preventCopyPaste ? "no-copy" : ""}`}
+                      >
+                        {opt}
+                      </span>
                     </button>
                   );
                 })}
@@ -678,13 +759,161 @@ timeTakenSeconds = Math.max(timeTakenSeconds, 1);
         </div>
 
         {!submitted && questions.length > 0 && (
-          <Button
-            onClick={() => handleSubmit(false)}
-            disabled={blocked}
-            className="w-full mt-6 gradient-primary text-primary-foreground"
-          >
-            Submit Answers
-          </Button>
+          <>
+            {/* ===============================
+        ✅ Animated Navigator Sheet
+    =============================== */}
+            <div
+              className={`fixed inset-x-0 bottom-[72px] z-40 md:hidden transition-transform duration-300 ease-in-out
+        ${navOpen ? "translate-y-0" : "translate-y-full"}`}
+            >
+              <div className="bg-card border-t shadow-2xl rounded-t-2xl p-4">
+                {/* Handle Bar */}
+                <div
+                  className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4 cursor-pointer"
+                  onClick={() => setNavOpen(false)}
+                />
+
+                <h3 className="text-sm font-semibold text-center mb-3">
+                  Question Navigator
+                </h3>
+
+                {/* Question Pills */}
+                <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 justify-items-center place-content-center">
+
+                  {questions.map((q, i) => {
+                    const answered = answers[q.id] !== undefined;
+                    const active = currentQuestion === i;
+
+                    let pillClass =
+                      "bg-background border border-border text-muted-foreground hover:bg-muted";
+
+                    if (answered)
+                      pillClass = "bg-green-600 text-white border-green-600";
+
+                    if (active)
+                      pillClass = "bg-primary text-primary-foreground border-primary";
+
+
+                    return (
+                      <div className="">
+                      <button
+                        key={q.id}
+                        onClick={() => scrollToQuestion(i)}
+                        className={`h-9 w-9 rounded-full text-xs font-bold transition  ${pillClass}`}
+                      >
+                        {i + 1}
+                      </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ===============================
+        ✅ Sticky Bottom Bar
+    =============================== */}
+            <div className="fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur-md p-4 z-50">
+              <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto flex items-center justify-between gap-4">
+                {/* Answered Left */}
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
+                  Answered{" "}
+                  <span className="font-semibold text-foreground">
+                    {Object.keys(answers).length}/{questions.length}
+                  </span>
+                </p>
+
+                {/* Desktop Navigator */}
+              <div className="hidden md:flex flex-1 justify-center gap-2 overflow-x-auto px-2">
+                {questions.map((q, i) => {
+                  const answered = answers[q.id] !== undefined;
+                  const active = currentQuestion === i;
+
+                  let pillClass =
+                    "bg-background border border-border text-muted-foreground hover:bg-muted";
+
+                  if (answered) pillClass = "bg-green-600 text-white border-green-600";
+                  if (active) pillClass = "bg-primary text-primary-foreground border-primary";
+
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => scrollToQuestion(i)}
+                      className={`h-8 w-8 rounded-full text-xs font-bold transition ${pillClass}`}
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+
+
+                {/* Navigator Button Center */}
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="rounded-full md:hidden hover:bg-primary/90 "
+                  onClick={() => setNavOpen((prev) => !prev)}
+                >
+                  <ChevronUp
+                    className={`h-5 w-5 transition-transform duration-300  ${
+                      navOpen ? "rotate-180 " : ""
+                    }`}
+                  />
+                </Button>
+
+                {/* Submit Right */}
+                <AlertDialog open={openSubmitDialog} onOpenChange={setOpenSubmitDialog}>
+                {/* Submit Button */}
+                <AlertDialogTrigger asChild>
+                  <Button
+                    disabled={blocked}
+                    className="gradient-primary text-primary-foreground px-6 whitespace-nowrap"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSubmitClick();
+                    }}
+                  >
+                    Submit
+                  </Button>
+                </AlertDialogTrigger>
+
+                {/* Warning Modal */}
+                <AlertDialogContent
+                  className="rounded-2xl w-[92%] max-w-md mx-auto p-6 shadow-xl "
+                >
+
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Submit Quiz?</AlertDialogTitle>
+
+                    <AlertDialogDescription>
+                      You still have{" "}
+                      <b>{unansweredCount}</b>{" "}
+                      unanswered question(s).
+                      <br />
+                      Are you sure you want to submit?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Continue Quiz</AlertDialogCancel>
+
+                    <AlertDialogAction
+                      onClick={() => {
+                        setOpenSubmitDialog(false);
+                        handleSubmit(false);
+                      }}
+                    >
+                      Yes, Submit
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              </div>
+            </div>
+          </>
         )}
       </main>
     </div>

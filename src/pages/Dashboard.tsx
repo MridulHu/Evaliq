@@ -52,6 +52,7 @@ interface Quiz {
   prevent_tab_switch?: boolean;
   tab_switch_warnings?: number;
   prevent_copy_paste?: boolean;
+  randomise_questions?: boolean;
 }
 
 export default function Dashboard() {
@@ -77,7 +78,7 @@ export default function Dashboard() {
   const [tabWarnings, setTabWarnings] = useState(2);
 
   const [preventCopyPaste, setPreventCopyPaste] = useState(false);
-
+  const [randomiseQuestions, setRandomiseQuestions] = useState(false);
 
 
   /* -----------------------------------
@@ -87,7 +88,7 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from("quizzes")
       .select(
-        "id, title, share_token, created_at, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste"
+        "id, title, share_token, created_at, duration_minutes, max_retries, sharing_enabled, show_answers, prevent_tab_switch, tab_switch_warnings, prevent_copy_paste, randomise_questions"
       )
       .eq("user_id", user!.id)
       .order("created_at", { ascending: false });
@@ -168,6 +169,8 @@ export default function Dashboard() {
     setTabWarnings(quiz.tab_switch_warnings ?? 2);
 
     setPreventCopyPaste(quiz.prevent_copy_paste ?? false);
+    setRandomiseQuestions(quiz.randomise_questions ?? false);
+
 
 
     const retries = quiz.max_retries || 0;
@@ -195,6 +198,7 @@ export default function Dashboard() {
         prevent_tab_switch: preventTabSwitch,
         tab_switch_warnings: tabWarnings,
         prevent_copy_paste: preventCopyPaste,
+        randomise_questions: randomiseQuestions,
       })
       .eq("id", selectedQuiz.id);
 
@@ -537,6 +541,24 @@ export default function Dashboard() {
                 onCheckedChange={setShowAnswers}
               />
             </div>
+
+            {/* Shuffle Questions */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">
+                Randomise Question Order
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Shuffle questions for participants to prevent cheating
+              </p>
+            </div>
+
+            <Switch
+              checked={randomiseQuestions}
+              onCheckedChange={setRandomiseQuestions}
+            />
+          </div>
+
           </div>
         </div>
 
