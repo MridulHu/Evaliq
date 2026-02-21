@@ -26,6 +26,7 @@ export default function OCRQuizBuilder() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const PREVIEW_LIMIT = 10;
 
   // -------------------------------
   // Handle Upload + Append Questions
@@ -101,9 +102,7 @@ export default function OCRQuizBuilder() {
 
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="h-16 w-16 rounded-2xl gradient-accent flex items-center justify-center mx-auto shadow-md">
-            <FileText className="h-8 w-8 text-accent-foreground" />
-          </div>
+          
 
           <h2 className="font-display text-3xl font-bold">
             Import from Document
@@ -173,7 +172,7 @@ export default function OCRQuizBuilder() {
 
             {/* Preview Box */}
             <div className="rounded-xl border bg-muted/20 p-4 max-h-72 overflow-y-auto space-y-4">
-              {generatedQuestions.slice(0, 5).map((q, index) => (
+              {generatedQuestions.slice(0, PREVIEW_LIMIT).map((q, index) => (
                 <div
                   key={index}
                   className="rounded-lg p-3 bg-background/70 border shadow-sm"
@@ -190,9 +189,9 @@ export default function OCRQuizBuilder() {
                 </div>
               ))}
 
-              {generatedQuestions.length > 5 && (
-                <p className="text-xs text-muted-foreground text-center pt-2">
-                  Showing first 5 questions... Continue to edit the full quiz.
+              {generatedQuestions.length > PREVIEW_LIMIT && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Showing first {PREVIEW_LIMIT} questions. Continue to edit the full quiz.
                 </p>
               )}
             </div>

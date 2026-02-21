@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Brain, ArrowRight } from "lucide-react";
+import { motion, AnimatePresence} from "framer-motion";
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -48,40 +49,85 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen overflow-hidden">
       {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 gradient-primary flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <Brain className="h-8 w-8 text-primary-foreground" />
-          <span className="font-display text-2xl font-bold text-primary-foreground">QuizForge</span>
-        </div>
-        <div>
-          <h1 className="font-display text-5xl font-bold leading-tight text-primary-foreground mb-4">
-            Create, share, and master knowledge.
-          </h1>
-          <p className="text-lg text-primary-foreground/80 max-w-md">
-            Build quizzes manually, generate them with AI, or extract from documents. Share with anyone via a single link.
+      <motion.div
+        initial={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
+        animate={{ opacity: 1, clipPath: "inset(0 0% 0 0)" }}
+        transition={{ duration: 0.9, ease: "easeOut" }}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
+      >
+        {/* Background Video */}
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src="/hero-bg1.mp4" type="video/mp4" />
+        </video>
+
+        {/* Dark Overlay */}
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
+          <div className="flex items-center gap-3">
+            <Brain className="h-8 w-8 text-white" />
+            <span className="font-display text-2xl font-bold">
+              QuizForge
+            </span>
+          </div>
+
+          <div>
+            <h1 className="font-display text-5xl font-bold leading-tight mb-4">
+              Create, share, and master knowledge.
+            </h1>
+            <p className="text-lg text-white/80 max-w-md">
+              Build quizzes manually, generate them with AI, or extract from documents.
+              Share with anyone via a single link.
+            </p>
+          </div>
+
+          <p className="text-sm text-white/60">
+            Created by Mridul Das.
           </p>
         </div>
-        <p className="text-sm text-primary-foreground/60">Created by Mridul Das.</p>
-      </div>
+      </motion.div>
 
       {/* Right - Auth Form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-8">
+      <motion.div
+        initial={{ opacity: 0, x: 60 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="flex w-full lg:w-1/2 items-center justify-center p-8"
+      >
         <div className="w-full max-w-md animate-fade-in">
           <div className="flex items-center gap-3 mb-8 lg:hidden">
             <Brain className="h-7 w-7 text-primary" />
             <span className="font-display text-xl font-bold">QuizForge</span>
           </div>
 
-          <h2 className="font-display text-3xl font-bold mb-2">
-            {isSignUp ? "Create an account" : "Welcome back"}
-          </h2>
-          <p className="text-muted-foreground mb-8">
-            {isSignUp
-              ? "Start creating and sharing quizzes today."
-              : "Sign in to access your quizzes."}
-          </p>
+          <AnimatePresence mode="wait">
+          <motion.div
+            key={isSignUp ? "signup" : "signin"}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h2 className="font-display text-3xl font-bold mb-2">
+              {isSignUp ? "Create an account" : "Welcome back"}
+            </h2>
+
+            <p className="text-muted-foreground mb-8">
+              {isSignUp
+                ? "Start creating and sharing quizzes today."
+                : "Sign in to access your quizzes."}
+            </p>
+          </motion.div>
+        </AnimatePresence>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -115,10 +161,19 @@ export default function Auth() {
               {loading ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
               ) : (
-                <>
+                <AnimatePresence mode="wait">
+                <motion.span
+                  key={isSignUp ? "signupbtn" : "signinbtn"}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center"
+                >
                   {isSignUp ? "Create Account" : "Sign In"}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </>
+                </motion.span>
+              </AnimatePresence>
               )}
             </Button>
           </form>
@@ -133,7 +188,7 @@ export default function Auth() {
             </button>
           </p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
