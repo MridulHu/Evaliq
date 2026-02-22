@@ -3,11 +3,15 @@
 
   <url>
     <loc>https://quizlytic-six.vercel.app/</loc>
+    <lastmod>2026-02-22</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
     <loc>https://quizlytic-six.vercel.app/auth</loc>
+    <lastmod>2026-02-22</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
