@@ -97,7 +97,7 @@ export default function Index() {
 >
   <div className="flex flex-col items-center gap-6">
     <div className="h-14 w-14 rounded-full border-4 border-white/20 border-t-purple-500 animate-spin" />
-    <p className="text-white tracking-wide">Loading Quizlytic</p>
+    <p className="text-white tracking-wide">Loading Evaliq</p>
   </div>
 </div>
       {/* ================= VIDEO BACKGROUND ================= */}
@@ -131,7 +131,7 @@ export default function Index() {
           <div className="flex items-center gap-3 group cursor-pointer">
             <Brain className="h-7 w-7 text-white" />
             <span className="font-display text-xl font-bold relative">
-              Quizlytic
+              Evaliq
               <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-white transition-all duration-300 group-hover:w-full" />
             </span>
           </div>

@@ -76,7 +76,7 @@ export default function Auth() {
           <div className="flex items-center gap-3">
             <Brain className="h-8 w-8 text-white" />
             <span className="font-display text-2xl font-bold">
-              Quizlytic
+              Evaliq
             </span>
           </div>
 
@@ -106,7 +106,7 @@ export default function Auth() {
         <div className="w-full max-w-md animate-fade-in">
           <div className="flex items-center gap-3 mb-8 lg:hidden">
             <Brain className="h-7 w-7 text-primary" />
-            <span className="font-display text-xl font-bold">Quizlytic</span>
+            <span className="font-display text-xl font-bold">Evaliq</span>
           </div>
 
           <AnimatePresence mode="wait">

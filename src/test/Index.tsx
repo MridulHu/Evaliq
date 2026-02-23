@@ -32,7 +32,7 @@ export default function Index() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
             <Brain className="h-7 w-7 text-primary" />
-            <span className="font-display text-xl font-bold">Quizlytic</span>
+            <span className="font-display text-xl font-bold">Evaliq</span>
           </div>
           <Button
             onClick={() => navigate(user ? "/dashboard" : "/auth")}

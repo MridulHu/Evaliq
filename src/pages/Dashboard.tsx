@@ -272,7 +272,7 @@ const clearLeaderboard = async () => {
             <Brain className="h-7 w-7 text-primary" />
 
             <span className="font-display text-xl font-bold hover:opacity-80 transition">
-              Quizlytic
+              Evaliq
             </span>
           </div>
 
