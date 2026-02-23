@@ -8,9 +8,11 @@
 
 
 <url>
-  <loc>https://evaliq-two.vercel.app/</loc>
-  <lastmod>2026-02-23T08:17:27+00:00</lastmod>
-</url>
+    <loc>https://evaliq-two.vercel.app/</loc>
+    <lastmod>2026-02-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
 
 
 </urlset>
